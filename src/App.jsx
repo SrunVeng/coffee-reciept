@@ -104,6 +104,15 @@ const messages = {
     noKeep: 'No, keep it',
     yesDelete: 'Yes, delete',
     deleting: 'Deleting...',
+    selectItems: 'Select items',
+    selectedCount: '{count} selected',
+    selectAll: 'Select all',
+    clearSelection: 'Clear',
+    deleteSelected: 'Delete selected',
+    confirmDeleteManyTitle: 'Delete selected items?',
+    confirmDeleteManyText: 'Permanently delete {count} selected items? This cannot be undone.',
+    itemsDeleted: '{count} items deleted',
+    usedItemsSkipped: 'Items currently used by recipes cannot be selected.',
     dataChanged: 'Recipe data changed on another device. Reload the page and try again.',
     backendError: 'Cannot connect to the recipe server. Start the app with “npm run dev”, then open the shown address.',
     storageError: 'The recipe library is available read-only. To save changes, connect a Public Vercel Blob store to this project and redeploy.',
@@ -212,6 +221,15 @@ const messages = {
     noKeep: 'ទេ រក្សាទុក',
     yesDelete: 'បាទ/ចាស លុប',
     deleting: 'កំពុងលុប...',
+    selectItems: 'ជ្រើសរើសច្រើន',
+    selectedCount: 'បានជ្រើស {count}',
+    selectAll: 'ជ្រើសទាំងអស់',
+    clearSelection: 'សម្អាត',
+    deleteSelected: 'លុបដែលបានជ្រើស',
+    confirmDeleteManyTitle: 'លុបធាតុដែលបានជ្រើសមែនទេ?',
+    confirmDeleteManyText: 'ធាតុដែលបានជ្រើស {count} នឹងត្រូវលុបជាអចិន្ត្រៃយ៍ ហើយមិនអាចយកមកវិញបានទេ។',
+    itemsDeleted: 'បានលុប {count} ធាតុ',
+    usedItemsSkipped: 'ធាតុដែលកំពុងប្រើក្នុងរូបមន្ត មិនអាចជ្រើសដើម្បីលុបបានទេ។',
     dataChanged: 'ទិន្នន័យរូបមន្តត្រូវបានកែប្រែពីឧបករណ៍ផ្សេង។ សូមផ្ទុកទំព័រឡើងវិញ ហើយសាកល្បងម្តងទៀត។',
     backendError: 'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេរូបមន្តបានទេ។ សូមដំណើរការ “npm run dev” ហើយបើកអាសយដ្ឋានដែលបានបង្ហាញ។',
     storageError: 'អាចមើលរូបមន្តបាន ប៉ុន្តែមិនទាន់អាចរក្សាទុកការកែប្រែបានទេ។ សូមភ្ជាប់ Public Vercel Blob Store ទៅ Project នេះ ហើយ Deploy ម្តងទៀត។',
@@ -335,9 +353,13 @@ function CategoryArtwork({ category }) {
   return <span className={`drink-icon ${iconName}`}><Icon name={iconName} size={34} /></span>
 }
 
-const RecipeCard = memo(function RecipeCard({ recipe, language, t, onOpen }) {
+const RecipeCard = memo(function RecipeCard({ recipe, language, t, onOpen, selectionMode, selected, onToggle }) {
   return (
-    <button className="recipe-card" onClick={() => onOpen(recipe)}>
+    <button
+      className={`recipe-card${selected ? ' selected' : ''}`}
+      onClick={() => selectionMode ? onToggle(recipe.id) : onOpen(recipe)}
+      aria-pressed={selectionMode ? selected : undefined}
+    >
       <CategoryArtwork category={recipe.category} />
       <span className="recipe-card-copy">
         <span className="card-title-row">
@@ -347,7 +369,9 @@ const RecipeCard = memo(function RecipeCard({ recipe, language, t, onOpen }) {
         <small>{localText(recipe, 'description', language)}</small>
         <span><Icon name="clock" size={15} /> {recipe.prepTime} {t.minutes} · {translateCategory(recipe.category, t)}</span>
       </span>
-      <span className="open-arrow"><Icon name="arrow" size={20} /></span>
+      <span className={selectionMode ? 'selection-check' : 'open-arrow'}>
+        <Icon name={selected ? 'check' : selectionMode ? 'plus' : 'arrow'} size={20} />
+      </span>
     </button>
   )
 })
@@ -376,22 +400,29 @@ function PreparationSteps({ preparation, language }) {
   )
 }
 
-function PreparationCard({ preparation, language, t, usedCount, onOpen, onEdit, onDelete }) {
+function PreparationCard({ preparation, language, t, usedCount, onOpen, onEdit, onDelete, selectionMode, selected, onToggle }) {
+  const unavailable = selectionMode && usedCount > 0
   return (
-    <article className="preparation-card">
-      <button className="preparation-open" onClick={() => onOpen(preparation)}>
+    <article className={`preparation-card${selected ? ' selected' : ''}${unavailable ? ' unavailable' : ''}`}>
+      <button
+        className="preparation-open"
+        disabled={unavailable}
+        onClick={() => selectionMode ? onToggle(preparation.id) : onOpen(preparation)}
+        aria-pressed={selectionMode ? selected : undefined}
+        title={unavailable ? t.cannotDeleteUsedPreparation : undefined}
+      >
         <span className="prep-icon"><Icon name="prep" size={26} /></span>
         <span>
           <strong>{localText(preparation, 'name', language)}</strong>
           <small>{localText(preparation, 'description', language)}</small>
           <em>{t.yield}: {preparation.yieldAmount} {preparation.yieldUnit} · {usedCount} {t.recipePlural}</em>
         </span>
-        <Icon name="arrow" size={19} />
+        <span className={selectionMode ? 'selection-check' : ''}><Icon name={selected ? 'check' : selectionMode ? 'plus' : 'arrow'} size={19} /></span>
       </button>
-      <div className="preparation-actions">
+      {!selectionMode && <div className="preparation-actions">
         <button onClick={() => onEdit(preparation)} aria-label={`${t.editPreparation} ${preparation.name}`}><Icon name="edit" size={17} /></button>
         <button disabled={usedCount > 0} onClick={() => onDelete(preparation.id)} aria-label={`${t.delete} ${preparation.name}`} title={usedCount > 0 ? t.cannotDeleteUsedPreparation : t.delete}><Icon name="trash" size={17} /></button>
-      </div>
+      </div>}
     </article>
   )
 }
@@ -881,7 +912,48 @@ function PreparationForm({ preparation, ingredients, language, t, onClose, onSav
   )
 }
 
-function Warehouse({ ingredients, usageCounts, language, t, onAdd, onUpdate, onDelete }) {
+function SelectionToolbar({ active, selectedCount, selectableIds, t, onStart, onToggleAll, onDelete, onCancel }) {
+  if (!active) {
+    return (
+      <div className="selection-toolbar idle">
+        <button className="secondary-button" onClick={onStart}><Icon name="check" size={17} /> {t.selectItems}</button>
+      </div>
+    )
+  }
+
+  const allSelected = selectableIds.length > 0 && selectedCount === selectableIds.length
+  return (
+    <div className="selection-toolbar active" role="toolbar" aria-label={t.selectItems}>
+      <strong>{t.selectedCount.replace('{count}', selectedCount)}</strong>
+      <div>
+        <button className="secondary-button" disabled={!selectableIds.length} onClick={onToggleAll}>
+          {allSelected ? t.clearSelection : t.selectAll}
+        </button>
+        <button className="bulk-delete-button" disabled={!selectedCount} onClick={onDelete}>
+          <Icon name="trash" size={17} /> {t.deleteSelected}
+        </button>
+        <button className="text-button" onClick={onCancel}>{t.cancel}</button>
+      </div>
+    </div>
+  )
+}
+
+function Warehouse({
+  ingredients,
+  usageCounts,
+  language,
+  t,
+  onAdd,
+  onUpdate,
+  onDelete,
+  selectionMode,
+  selectedIds,
+  onStartSelection,
+  onToggleSelection,
+  onToggleAll,
+  onDeleteSelected,
+  onCancelSelection,
+}) {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ name: '', nameKm: '', category: 'Coffee', defaultUnit: 'g' })
@@ -893,6 +965,10 @@ function Warehouse({ ingredients, usageCounts, language, t, onAdd, onUpdate, onD
       `${item.name} ${item.nameKm || ''}`.toLocaleLowerCase().includes(normalizedQuery),
     )
   }, [ingredients, query])
+  const selectableIds = useMemo(
+    () => filtered.filter((item) => (usageCounts.get(item.id) || 0) === 0).map((item) => item.id),
+    [filtered, usageCounts],
+  )
   const reset = () => { setEditing(null); setForm({ name: '', nameKm: '', category: 'Coffee', defaultUnit: 'g' }) }
 
   const submit = async (event) => {
@@ -911,6 +987,19 @@ function Warehouse({ ingredients, usageCounts, language, t, onAdd, onUpdate, onD
   return (
     <section className="warehouse-page">
       <div className="page-heading"><div><span>{t.ingredientWarehouse}</span><h1>{t.ingredients}</h1><p>{t.warehouseHelp}</p></div></div>
+      {!!ingredients.length && (
+        <SelectionToolbar
+          active={selectionMode}
+          selectedCount={selectedIds.size}
+          selectableIds={selectableIds}
+          t={t}
+          onStart={onStartSelection}
+          onToggleAll={() => onToggleAll(selectableIds)}
+          onDelete={onDeleteSelected}
+          onCancel={onCancelSelection}
+        />
+      )}
+      {selectionMode && selectableIds.length < filtered.length && <p className="selection-help">{t.usedItemsSkipped}</p>}
       <div className="warehouse-layout">
         <form id="ingredient-form" className="ingredient-form" onSubmit={submit}>
           <h2>{editing ? t.editIngredient : t.addIngredient}</h2>
@@ -931,12 +1020,27 @@ function Warehouse({ ingredients, usageCounts, language, t, onAdd, onUpdate, onD
             {filtered.map((ingredient) => {
               const usedCount = usageCounts.get(ingredient.id) || 0
               return (
-                <div className="warehouse-row" key={ingredient.id}>
+                <div className={`warehouse-row${selectedIds.has(ingredient.id) ? ' selected' : ''}`} key={ingredient.id}>
                   <span className="ingredient-symbol"><Icon name={ingredient.category === 'Tea' ? 'tea' : ingredient.category === 'Coffee' ? 'espresso' : 'box'} size={20} /></span>
                   <div><strong>{localText(ingredient, 'name', language)}</strong><span>{ingredient.category} · {t.defaultLabel} {ingredient.defaultUnit} · {t.usedIn} {usedCount} {usedCount === 1 ? t.recipe : t.recipePlural}</span></div>
                   <div className="row-actions">
-                    <button onClick={() => { setEditing(ingredient); setForm({ name: ingredient.name, nameKm: ingredient.nameKm || '', category: ingredient.category, defaultUnit: ingredient.defaultUnit }) }} aria-label={`${t.editIngredient} ${ingredient.name}`}><Icon name="edit" size={17} /></button>
-                    <button disabled={usedCount > 0} onClick={() => onDelete(ingredient.id)} aria-label={`${t.delete} ${ingredient.name}`}><Icon name="trash" size={17} /></button>
+                    {selectionMode ? (
+                      <button
+                        className="row-select"
+                        disabled={usedCount > 0}
+                        onClick={() => onToggleSelection(ingredient.id)}
+                        aria-label={`${t.selectItems} ${ingredient.name}`}
+                        aria-pressed={selectedIds.has(ingredient.id)}
+                        title={usedCount > 0 ? t.usedItemsSkipped : t.selectItems}
+                      >
+                        <Icon name={selectedIds.has(ingredient.id) ? 'check' : 'plus'} size={17} />
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditing(ingredient); setForm({ name: ingredient.name, nameKm: ingredient.nameKm || '', category: ingredient.category, defaultUnit: ingredient.defaultUnit }) }} aria-label={`${t.editIngredient} ${ingredient.name}`}><Icon name="edit" size={17} /></button>
+                        <button disabled={usedCount > 0} onClick={() => onDelete(ingredient.id)} aria-label={`${t.delete} ${ingredient.name}`}><Icon name="trash" size={17} /></button>
+                      </>
+                    )}
                   </div>
                 </div>
               )
@@ -948,18 +1052,65 @@ function Warehouse({ ingredients, usageCounts, language, t, onAdd, onUpdate, onD
   )
 }
 
-function PreparationsPage({ preparations, usageCounts, language, t, onOpen, onCreate, onEdit, onDelete }) {
+function PreparationsPage({
+  preparations,
+  usageCounts,
+  language,
+  t,
+  onOpen,
+  onCreate,
+  onEdit,
+  onDelete,
+  selectionMode,
+  selectedIds,
+  onStartSelection,
+  onToggleSelection,
+  onToggleAll,
+  onDeleteSelected,
+  onCancelSelection,
+}) {
+  const selectableIds = useMemo(
+    () => preparations.filter((item) => (usageCounts.get(item.id) || 0) === 0).map((item) => item.id),
+    [preparations, usageCounts],
+  )
   return (
     <section className="warehouse-page">
       <div className="page-heading preparation-heading">
         <div><span>{t.preparationGuide}</span><h1>{t.preparations}</h1><p>{t.preparationHelp}</p></div>
         <button className="primary-button" onClick={onCreate}><Icon name="plus" size={18} /> {t.newPreparation}</button>
       </div>
+      {!!preparations.length && (
+        <SelectionToolbar
+          active={selectionMode}
+          selectedCount={selectedIds.size}
+          selectableIds={selectableIds}
+          t={t}
+          onStart={onStartSelection}
+          onToggleAll={() => onToggleAll(selectableIds)}
+          onDelete={onDeleteSelected}
+          onCancel={onCancelSelection}
+        />
+      )}
+      {selectionMode && selectableIds.length < preparations.length && <p className="selection-help">{t.usedItemsSkipped}</p>}
       {preparations.length ? (
         <div className="preparation-grid">
           {preparations.map((preparation) => {
             const usedCount = usageCounts.get(preparation.id) || 0
-            return <PreparationCard key={preparation.id} preparation={preparation} language={language} t={t} usedCount={usedCount} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} />
+            return (
+              <PreparationCard
+                key={preparation.id}
+                preparation={preparation}
+                language={language}
+                t={t}
+                usedCount={usedCount}
+                onOpen={onOpen}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                selectionMode={selectionMode}
+                selected={selectedIds.has(preparation.id)}
+                onToggle={onToggleSelection}
+              />
+            )
           })}
         </div>
       ) : (
@@ -971,13 +1122,18 @@ function PreparationsPage({ preparations, usageCounts, language, t, onOpen, onCr
 
 function ConfirmDeleteDialog({ item, t, deleting, onCancel, onConfirm }) {
   if (!item) return null
+  const count = item.ids.length
+  const title = count > 1 ? t.confirmDeleteManyTitle : t.confirmDeleteTitle
+  const description = count > 1
+    ? t.confirmDeleteManyText.replace('{count}', count)
+    : t.confirmDeleteText.replace('{name}', item.names[0])
 
   return (
     <div className="overlay confirm-overlay" onMouseDown={(event) => event.target === event.currentTarget && !deleting && onCancel()}>
       <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">
         <span className="confirm-icon"><Icon name="trash" size={25} /></span>
-        <h2 id="confirm-delete-title">{t.confirmDeleteTitle}</h2>
-        <p id="confirm-delete-text">{t.confirmDeleteText.replace('{name}', item.name)}</p>
+        <h2 id="confirm-delete-title">{title}</h2>
+        <p id="confirm-delete-text">{description}</p>
         <div className="confirm-actions">
           <button className="secondary-button" disabled={deleting} onClick={onCancel}>{t.noKeep}</button>
           <button className="confirm-delete-button" disabled={deleting} onClick={onConfirm}>
@@ -1006,8 +1162,15 @@ function App() {
   const [toast, setToast] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [selectionModes, setSelectionModes] = useState({ recipe: false, preparation: false, ingredient: false })
+  const [selectedForDelete, setSelectedForDelete] = useState({ recipe: [], preparation: [], ingredient: [] })
   const toastTimer = useRef(null)
   const t = messages[language]
+  const selectedSets = useMemo(() => ({
+    recipe: new Set(selectedForDelete.recipe),
+    preparation: new Set(selectedForDelete.preparation),
+    ingredient: new Set(selectedForDelete.ingredient),
+  }), [selectedForDelete])
 
   const showError = (error) => setError(errorMessage(error, t))
 
@@ -1059,6 +1222,7 @@ function App() {
     const text = `${recipe.name} ${recipe.nameKm || ''} ${recipe.description} ${recipe.descriptionKm || ''}`.toLocaleLowerCase()
     return matchesCategory && text.includes(query.trim().toLocaleLowerCase())
   }), [data.recipes, category, query])
+  const filteredRecipeIds = useMemo(() => filteredRecipes.map((recipe) => recipe.id), [filteredRecipes])
 
   const preparationUsageCounts = useMemo(() => {
     const counts = new Map()
@@ -1081,6 +1245,50 @@ function App() {
     data.preparations.forEach((preparation) => addUsage(preparation.ingredients || []))
     return counts
   }, [data.recipes, data.preparations])
+
+  const startSelection = (type) => {
+    setSelectionModes((current) => ({ ...current, [type]: true }))
+  }
+
+  const cancelSelection = (type) => {
+    setSelectionModes((current) => ({ ...current, [type]: false }))
+    setSelectedForDelete((current) => ({ ...current, [type]: [] }))
+  }
+
+  const toggleSelection = (type, id) => {
+    setSelectedForDelete((current) => {
+      const selected = new Set(current[type])
+      if (selected.has(id)) selected.delete(id)
+      else selected.add(id)
+      return { ...current, [type]: [...selected] }
+    })
+  }
+
+  const toggleAllSelection = (type, ids) => {
+    setSelectedForDelete((current) => {
+      const selected = new Set(current[type])
+      const allSelected = ids.length > 0 && ids.every((id) => selected.has(id))
+      if (allSelected) return { ...current, [type]: [] }
+      ids.forEach((id) => selected.add(id))
+      return { ...current, [type]: [...selected] }
+    })
+  }
+
+  const itemsForType = (type) => {
+    if (type === 'recipe') return data.recipes
+    if (type === 'preparation') return data.preparations
+    return data.ingredients
+  }
+
+  const askToDeleteSelected = (type) => {
+    const ids = selectedForDelete[type]
+    if (!ids.length || deleting) return
+    const idSet = new Set(ids)
+    const names = itemsForType(type)
+      .filter((item) => idSet.has(item.id))
+      .map((item) => localText(item, 'name', language))
+    setDeleteTarget({ type, ids, names })
+  }
 
   const saveRecipe = async (recipe) => {
     const isEditing = Boolean(editingRecipe)
@@ -1151,7 +1359,7 @@ function App() {
 
   const askToDelete = (type, id, name) => {
     if (deleting) return
-    setDeleteTarget({ type, id, name })
+    setDeleteTarget({ type, ids: [id], names: [name] })
   }
 
   const confirmDelete = async () => {
@@ -1159,33 +1367,40 @@ function App() {
 
     const target = deleteTarget
     const settings = {
-      recipe: { path: `/api/recipes/${target.id}`, message: t.recipeDeleted },
-      preparation: { path: `/api/preparations/${target.id}`, message: t.preparationDeleted },
-      ingredient: { path: `/api/ingredients/${target.id}`, message: t.ingredientDeleted },
+      recipe: { message: t.recipeDeleted },
+      preparation: { message: t.preparationDeleted },
+      ingredient: { message: t.ingredientDeleted },
     }[target.type]
 
     if (!settings) return
 
     setDeleting(true)
     setError('')
-    if (target.type === 'recipe') setSelectedRecipe(null)
-    if (target.type === 'preparation') setSelectedPreparation(null)
+    if (target.type === 'recipe' && target.ids.includes(selectedRecipe?.id)) setSelectedRecipe(null)
+    if (target.type === 'preparation' && target.ids.includes(selectedPreparation?.id)) setSelectedPreparation(null)
 
     try {
-      await api(settings.path, { method: 'DELETE' })
+      const result = await api('/api/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ type: target.type, ids: target.ids }),
+      })
+      const deletedIds = new Set(result.deletedIds || target.ids)
       setData((current) => {
         if (target.type === 'recipe') {
-          return { ...current, recipes: current.recipes.filter((item) => item.id !== target.id) }
+          return { ...current, recipes: current.recipes.filter((item) => !deletedIds.has(item.id)) }
         }
         if (target.type === 'preparation') {
-          return { ...current, preparations: current.preparations.filter((item) => item.id !== target.id) }
+          return { ...current, preparations: current.preparations.filter((item) => !deletedIds.has(item.id)) }
         }
-        return { ...current, ingredients: current.ingredients.filter((item) => item.id !== target.id) }
+        return { ...current, ingredients: current.ingredients.filter((item) => !deletedIds.has(item.id)) }
       })
-      notify(settings.message)
+      cancelSelection(target.type)
+      notify(target.ids.length > 1
+        ? t.itemsDeleted.replace('{count}', deletedIds.size)
+        : settings.message)
     } catch (error) {
-      if (target.type === 'preparation' && error.message.includes('used in a drink')) {
-        setError(t.cannotDeleteUsedPreparation)
+      if (error.code === 'ITEMS_IN_USE') {
+        setError(target.type === 'preparation' ? t.cannotDeleteUsedPreparation : t.usedItemsSkipped)
       } else {
         showError(error)
       }
@@ -1216,20 +1431,28 @@ function App() {
     : page === 'warehouse'
       ? t.addIngredient
       : t.newRecipe
+  const currentSelectionType = page === 'recipes' ? 'recipe' : page === 'preparations' ? 'preparation' : 'ingredient'
+  const isSelecting = selectionModes[currentSelectionType]
+
+  const changePage = (nextPage) => {
+    setPage(nextPage)
+    setSelectionModes({ recipe: false, preparation: false, ingredient: false })
+    setSelectedForDelete({ recipe: [], preparation: [], ingredient: [] })
+  }
 
   if (loading) return <div className="state-screen"><span className="loader" /><p>{t.loading}</p></div>
 
   return (
     <div className={`app lang-${language}`}>
       <header className="topbar">
-        <button className="brand" onClick={() => setPage('recipes')}>
+        <button className="brand" onClick={() => changePage('recipes')}>
           <span className="brand-word">PHIN</span><i className="brand-amp">&</i><span className="brand-word">POUR</span>
           <span className="brand-short">P&amp;P</span><small>{t.staffRecipes}</small>
         </button>
         <nav>
-          <button aria-label={t.recipes} title={t.recipes} className={page === 'recipes' ? 'active' : ''} onClick={() => setPage('recipes')}><Icon name="book" size={18} /><span className="nav-label">{t.recipes}</span></button>
-          <button aria-label={t.preparations} title={t.preparations} className={page === 'preparations' ? 'active' : ''} onClick={() => setPage('preparations')}><Icon name="prep" size={18} /><span className="nav-label">{t.preparations}</span></button>
-          <button aria-label={t.ingredients} title={t.ingredients} className={page === 'warehouse' ? 'active' : ''} onClick={() => setPage('warehouse')}><Icon name="box" size={18} /><span className="nav-label">{t.ingredients}</span></button>
+          <button aria-label={t.recipes} title={t.recipes} className={page === 'recipes' ? 'active' : ''} onClick={() => changePage('recipes')}><Icon name="book" size={18} /><span className="nav-label">{t.recipes}</span></button>
+          <button aria-label={t.preparations} title={t.preparations} className={page === 'preparations' ? 'active' : ''} onClick={() => changePage('preparations')}><Icon name="prep" size={18} /><span className="nav-label">{t.preparations}</span></button>
+          <button aria-label={t.ingredients} title={t.ingredients} className={page === 'warehouse' ? 'active' : ''} onClick={() => changePage('warehouse')}><Icon name="box" size={18} /><span className="nav-label">{t.ingredients}</span></button>
         </nav>
         <div className="header-actions">
           <div className="language-switch" aria-label="Language">
@@ -1251,7 +1474,32 @@ function App() {
               {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{translateCategory(item, t)}</button>)}
             </div>
             {filteredRecipes.length ? (
-              <div className="recipe-list">{filteredRecipes.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} language={language} t={t} onOpen={setSelectedRecipe} />)}</div>
+              <>
+                <SelectionToolbar
+                  active={selectionModes.recipe}
+                  selectedCount={selectedSets.recipe.size}
+                  selectableIds={filteredRecipeIds}
+                  t={t}
+                  onStart={() => startSelection('recipe')}
+                  onToggleAll={() => toggleAllSelection('recipe', filteredRecipeIds)}
+                  onDelete={() => askToDeleteSelected('recipe')}
+                  onCancel={() => cancelSelection('recipe')}
+                />
+                <div className="recipe-list">
+                  {filteredRecipes.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      language={language}
+                      t={t}
+                      onOpen={setSelectedRecipe}
+                      selectionMode={selectionModes.recipe}
+                      selected={selectedSets.recipe.has(recipe.id)}
+                      onToggle={(id) => toggleSelection('recipe', id)}
+                    />
+                  ))}
+                </div>
+              </>
             ) : (
               <div className="empty"><Icon name="search" size={30} /><h2>{t.noDrink}</h2><p>{t.tryDifferent}</p></div>
             )}
@@ -1269,6 +1517,13 @@ function App() {
               const preparation = data.preparations.find((item) => item.id === id)
               askToDelete('preparation', id, localText(preparation, 'name', language))
             }}
+            selectionMode={selectionModes.preparation}
+            selectedIds={selectedSets.preparation}
+            onStartSelection={() => startSelection('preparation')}
+            onToggleSelection={(id) => toggleSelection('preparation', id)}
+            onToggleAll={(ids) => toggleAllSelection('preparation', ids)}
+            onDeleteSelected={() => askToDeleteSelected('preparation')}
+            onCancelSelection={() => cancelSelection('preparation')}
           />
         ) : (
           <Warehouse
@@ -1279,6 +1534,13 @@ function App() {
               const ingredient = data.ingredients.find((item) => item.id === id)
               askToDelete('ingredient', id, localText(ingredient, 'name', language))
             }}
+            selectionMode={selectionModes.ingredient}
+            selectedIds={selectedSets.ingredient}
+            onStartSelection={() => startSelection('ingredient')}
+            onToggleSelection={(id) => toggleSelection('ingredient', id)}
+            onToggleAll={(ids) => toggleAllSelection('ingredient', ids)}
+            onDeleteSelected={() => askToDeleteSelected('ingredient')}
+            onCancelSelection={() => cancelSelection('ingredient')}
           />
         )}
       </main>
@@ -1316,7 +1578,7 @@ function App() {
         onConfirm={confirmDelete}
       />
 
-      <button className="mobile-add" onClick={openMobileCreate} aria-label={mobileCreateLabel}><Icon name="plus" size={23} /></button>
+      {!isSelecting && <button className="mobile-add" onClick={openMobileCreate} aria-label={mobileCreateLabel}><Icon name="plus" size={23} /></button>}
       {error && <div className="error-toast"><Icon name="alert" size={18} /><span>{error}</span><button onClick={() => setError('')} aria-label={t.cancel}><Icon name="close" size={16} /></button></div>}
       {toast && <div className="success-toast"><Icon name="check" size={17} />{toast}</div>}
     </div>
