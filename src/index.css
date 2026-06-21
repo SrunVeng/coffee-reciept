@@ -16,7 +16,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: #f7f5f1; }
+body { margin: 0; min-width: 320px; min-height: 100vh; overflow-x: hidden; background: #f7f5f1; }
 button, input, select, textarea { font: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(198,109,60,.22); outline-offset: 2px; }
 #root { min-height: 100vh; }

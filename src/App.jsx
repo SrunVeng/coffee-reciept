@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const categories = ['All', 'Phin', 'Espresso', 'Signature', 'Tea', 'Other']
@@ -99,6 +99,12 @@ const messages = {
     ingredientAdded: 'Ingredient added',
     ingredientUpdated: 'Ingredient updated',
     ingredientDeleted: 'Ingredient deleted',
+    confirmDeleteTitle: 'Delete this item?',
+    confirmDeleteText: '“{name}” will be permanently deleted. This cannot be undone.',
+    noKeep: 'No, keep it',
+    yesDelete: 'Yes, delete',
+    deleting: 'Deleting...',
+    dataChanged: 'Recipe data changed on another device. Reload the page and try again.',
     backendError: 'Cannot connect to the recipe server. Start the app with “npm run dev”, then open the shown address.',
     storageError: 'The recipe library is available read-only. To save changes, connect a Public Vercel Blob store to this project and redeploy.',
     all: 'All',
@@ -201,6 +207,12 @@ const messages = {
     ingredientAdded: 'បានបន្ថែមគ្រឿងផ្សំ',
     ingredientUpdated: 'បានកែគ្រឿងផ្សំ',
     ingredientDeleted: 'បានលុបគ្រឿងផ្សំ',
+    confirmDeleteTitle: 'តើអ្នកពិតជាចង់លុបមែនទេ?',
+    confirmDeleteText: '“{name}” នឹងត្រូវលុបជាអចិន្ត្រៃយ៍ ហើយមិនអាចយកមកវិញបានទេ។',
+    noKeep: 'ទេ រក្សាទុក',
+    yesDelete: 'បាទ/ចាស លុប',
+    deleting: 'កំពុងលុប...',
+    dataChanged: 'ទិន្នន័យរូបមន្តត្រូវបានកែប្រែពីឧបករណ៍ផ្សេង។ សូមផ្ទុកទំព័រឡើងវិញ ហើយសាកល្បងម្តងទៀត។',
     backendError: 'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេរូបមន្តបានទេ។ សូមដំណើរការ “npm run dev” ហើយបើកអាសយដ្ឋានដែលបានបង្ហាញ។',
     storageError: 'អាចមើលរូបមន្តបាន ប៉ុន្តែមិនទាន់អាចរក្សាទុកការកែប្រែបានទេ។ សូមភ្ជាប់ Public Vercel Blob Store ទៅ Project នេះ ហើយ Deploy ម្តងទៀត។',
     all: 'ទាំងអស់',
@@ -241,7 +253,7 @@ function Icon({ name, size = 20 }) {
 }
 
 function categoryKey(category) {
-  return category.toLowerCase()
+  return String(category || '').toLowerCase()
 }
 
 function localText(item, field, language) {
@@ -249,7 +261,30 @@ function localText(item, field, language) {
 }
 
 function translateCategory(category, t) {
-  return t[categoryKey(category)]
+  return t[categoryKey(category)] || category || t.other
+}
+
+function localizedSteps(item, language) {
+  const steps = Array.isArray(item?.steps) ? item.steps : []
+  if (language !== 'km') return steps
+  return steps.map((step, index) => item.stepsKm?.[index]?.trim() || step)
+}
+
+function normalizeData(data) {
+  return {
+    recipes: Array.isArray(data?.recipes) ? data.recipes : [],
+    ingredients: Array.isArray(data?.ingredients) ? data.ingredients : [],
+    preparations: Array.isArray(data?.preparations) ? data.preparations : [],
+  }
+}
+
+function groupIngredients(ingredients) {
+  return ingredients.reduce((groups, ingredient) => {
+    const category = ingredient.category || 'Other'
+    if (!groups[category]) groups[category] = []
+    groups[category].push(ingredient)
+    return groups
+  }, {})
 }
 
 async function api(path, options) {
@@ -257,10 +292,15 @@ async function api(path, options) {
   try {
     response = await fetch(path, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      headers: {
+        Accept: 'application/json',
+        ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...options?.headers,
+      },
     })
-  } catch {
-    throw new Error('BACKEND_UNAVAILABLE')
+  } catch (error) {
+    if (error.name === 'AbortError') throw error
+    throw new Error('BACKEND_UNAVAILABLE', { cause: error })
   }
 
   const contentType = response.headers.get('content-type') || ''
@@ -268,23 +308,34 @@ async function api(path, options) {
     throw new Error('BACKEND_UNAVAILABLE')
   }
 
-  const body = await response.json()
-  if (!response.ok) throw new Error(body.error || 'Something went wrong')
+  let body
+  try {
+    body = await response.json()
+  } catch {
+    throw new Error('BACKEND_UNAVAILABLE')
+  }
+  if (!response.ok) {
+    const error = new Error(body.error || 'Something went wrong')
+    error.code = body.code
+    throw error
+  }
   return body
 }
 
 function errorMessage(error, translations) {
   if (error.message === 'BACKEND_UNAVAILABLE') return translations.backendError
   if (error.message.includes('Vercel Blob is not connected')) return translations.storageError
+  if (error.code === 'DATA_CHANGED') return translations.dataChanged
   return error.message
 }
 
 function CategoryArtwork({ category }) {
-  const iconName = categoryKey(category)
+  const key = categoryKey(category)
+  const iconName = icons[key] ? key : 'other'
   return <span className={`drink-icon ${iconName}`}><Icon name={iconName} size={34} /></span>
 }
 
-function RecipeCard({ recipe, language, t, onOpen }) {
+const RecipeCard = memo(function RecipeCard({ recipe, language, t, onOpen }) {
   return (
     <button className="recipe-card" onClick={() => onOpen(recipe)}>
       <CategoryArtwork category={recipe.category} />
@@ -299,7 +350,7 @@ function RecipeCard({ recipe, language, t, onOpen }) {
       <span className="open-arrow"><Icon name="arrow" size={20} /></span>
     </button>
   )
-}
+})
 
 function PreparationIngredients({ preparation, ingredientById, language }) {
   return (
@@ -315,9 +366,7 @@ function PreparationIngredients({ preparation, ingredientById, language }) {
 }
 
 function PreparationSteps({ preparation, language }) {
-  const steps = language === 'km' && preparation.stepsKm?.some(Boolean)
-    ? preparation.stepsKm
-    : preparation.steps
+  const steps = localizedSteps(preparation, language)
   return (
     <ol className="steps-list compact">
       {steps.map((step, index) => (
@@ -401,7 +450,7 @@ function RecipeView({ recipe, ingredients, preparations, language, t, onClose, o
     () => Object.fromEntries(preparations.map((item) => [item.id, item])),
     [preparations],
   )
-  const steps = language === 'km' && recipe.stepsKm?.some(Boolean) ? recipe.stepsKm : recipe.steps
+  const steps = localizedSteps(recipe, language)
 
   return (
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -486,7 +535,7 @@ function RecipeView({ recipe, ingredients, preparations, language, t, onClose, o
   )
 }
 
-function IngredientLine({ line, index, ingredients, language, t, onChange, onRemove }) {
+function IngredientLine({ line, index, ingredients, ingredientsByCategory, language, t, onChange, onRemove }) {
   const selectIngredient = (ingredientId) => {
     const selected = ingredients.find((item) => item.id === ingredientId)
     onChange(index, { ...line, ingredientId, unit: selected?.defaultUnit || line.unit })
@@ -499,7 +548,7 @@ function IngredientLine({ line, index, ingredients, language, t, onChange, onRem
         <select value={line.ingredientId} onChange={(event) => selectIngredient(event.target.value)} required>
           <option value="">{t.chooseIngredient}</option>
           {ingredientCategories.map((category) => {
-            const items = ingredients.filter((item) => item.category === category)
+            const items = ingredientsByCategory[category] || []
             if (!items.length) return null
             return (
               <optgroup label={category} key={category}>
@@ -567,6 +616,10 @@ function RecipeForm({ recipe, ingredients, preparations, language, t, onClose, o
     steps: [''], stepsKm: [''], notes: '', notesKm: '',
   })
   const [saving, setSaving] = useState(false)
+  const ingredientsByCategory = useMemo(
+    () => groupIngredients(ingredients),
+    [ingredients],
+  )
 
   const updateLines = (field, index, value) => {
     setForm((current) => ({
@@ -645,6 +698,7 @@ function RecipeForm({ recipe, ingredients, preparations, language, t, onClose, o
                     line={line}
                     index={index}
                     ingredients={ingredients}
+                    ingredientsByCategory={ingredientsByCategory}
                     language={language}
                     t={t}
                     onChange={(lineIndex, value) => updateLines('ingredients', lineIndex, value)}
@@ -718,6 +772,10 @@ function PreparationForm({ preparation, ingredients, language, t, onClose, onSav
     sources: [],
   })
   const [saving, setSaving] = useState(false)
+  const ingredientsByCategory = useMemo(
+    () => groupIngredients(ingredients),
+    [ingredients],
+  )
 
   const updateLines = (field, index, value) => {
     setForm((current) => ({
@@ -772,6 +830,7 @@ function PreparationForm({ preparation, ingredients, language, t, onClose, onSav
                     line={line}
                     index={index}
                     ingredients={ingredients}
+                    ingredientsByCategory={ingredientsByCategory}
                     language={language}
                     t={t}
                     onChange={(lineIndex, value) => updateLines('ingredients', lineIndex, value)}
@@ -822,31 +881,44 @@ function PreparationForm({ preparation, ingredients, language, t, onClose, onSav
   )
 }
 
-function Warehouse({ ingredients, recipes, preparations, language, t, onAdd, onUpdate, onDelete }) {
+function Warehouse({ ingredients, usageCounts, language, t, onAdd, onUpdate, onDelete }) {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ name: '', nameKm: '', category: 'Coffee', defaultUnit: 'g' })
-  const filtered = ingredients.filter((item) => `${item.name} ${item.nameKm || ''}`.toLowerCase().includes(query.toLowerCase()))
+  const [submitting, setSubmitting] = useState(false)
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase()
+    if (!normalizedQuery) return ingredients
+    return ingredients.filter((item) =>
+      `${item.name} ${item.nameKm || ''}`.toLocaleLowerCase().includes(normalizedQuery),
+    )
+  }, [ingredients, query])
   const reset = () => { setEditing(null); setForm({ name: '', nameKm: '', category: 'Coffee', defaultUnit: 'g' }) }
 
   const submit = async (event) => {
     event.preventDefault()
-    if (editing) await onUpdate(editing.id, form)
-    else await onAdd(form)
-    reset()
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      if (editing) await onUpdate(editing.id, form)
+      else await onAdd(form)
+      reset()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <section className="warehouse-page">
       <div className="page-heading"><div><span>{t.ingredientWarehouse}</span><h1>{t.ingredients}</h1><p>{t.warehouseHelp}</p></div></div>
       <div className="warehouse-layout">
-        <form className="ingredient-form" onSubmit={submit}>
+        <form id="ingredient-form" className="ingredient-form" onSubmit={submit}>
           <h2>{editing ? t.editIngredient : t.addIngredient}</h2>
           <label className="field"><span>{t.ingredientNameEn}</span><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
           <label className="field"><span>{t.ingredientNameKm}</span><input lang="km" value={form.nameKm} onChange={(event) => setForm({ ...form, nameKm: event.target.value })} /></label>
           <label className="field"><span>{t.group}</span><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{ingredientCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="field"><span>{t.defaultUnit}</span><select value={form.defaultUnit} onChange={(event) => setForm({ ...form, defaultUnit: event.target.value })}>{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
-          <button className="primary-button">{editing ? t.saveChanges : t.addIngredient}</button>
+          <button className="primary-button" disabled={submitting}>{submitting ? t.saving : editing ? t.saveChanges : t.addIngredient}</button>
           {editing && <button type="button" className="text-button" onClick={reset}>{t.cancelEditing}</button>}
         </form>
 
@@ -857,8 +929,7 @@ function Warehouse({ ingredients, recipes, preparations, language, t, onAdd, onU
           </div>
           <div className="warehouse-list">
             {filtered.map((ingredient) => {
-              const usedCount = recipes.filter((recipe) => recipe.ingredients.some((line) => line.ingredientId === ingredient.id)).length
-                + preparations.filter((preparation) => preparation.ingredients.some((line) => line.ingredientId === ingredient.id)).length
+              const usedCount = usageCounts.get(ingredient.id) || 0
               return (
                 <div className="warehouse-row" key={ingredient.id}>
                   <span className="ingredient-symbol"><Icon name={ingredient.category === 'Tea' ? 'tea' : ingredient.category === 'Coffee' ? 'espresso' : 'box'} size={20} /></span>
@@ -877,7 +948,7 @@ function Warehouse({ ingredients, recipes, preparations, language, t, onAdd, onU
   )
 }
 
-function PreparationsPage({ preparations, recipes, language, t, onOpen, onCreate, onEdit, onDelete }) {
+function PreparationsPage({ preparations, usageCounts, language, t, onOpen, onCreate, onEdit, onDelete }) {
   return (
     <section className="warehouse-page">
       <div className="page-heading preparation-heading">
@@ -887,9 +958,7 @@ function PreparationsPage({ preparations, recipes, language, t, onOpen, onCreate
       {preparations.length ? (
         <div className="preparation-grid">
           {preparations.map((preparation) => {
-            const usedCount = recipes.filter((recipe) =>
-              recipe.preparations?.some((line) => line.preparationId === preparation.id),
-            ).length
+            const usedCount = usageCounts.get(preparation.id) || 0
             return <PreparationCard key={preparation.id} preparation={preparation} language={language} t={t} usedCount={usedCount} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} />
           })}
         </div>
@@ -897,6 +966,26 @@ function PreparationsPage({ preparations, recipes, language, t, onOpen, onCreate
         <div className="empty"><Icon name="prep" size={30} /><h2>{t.noPreparations}</h2></div>
       )}
     </section>
+  )
+}
+
+function ConfirmDeleteDialog({ item, t, deleting, onCancel, onConfirm }) {
+  if (!item) return null
+
+  return (
+    <div className="overlay confirm-overlay" onMouseDown={(event) => event.target === event.currentTarget && !deleting && onCancel()}>
+      <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">
+        <span className="confirm-icon"><Icon name="trash" size={25} /></span>
+        <h2 id="confirm-delete-title">{t.confirmDeleteTitle}</h2>
+        <p id="confirm-delete-text">{t.confirmDeleteText.replace('{name}', item.name)}</p>
+        <div className="confirm-actions">
+          <button className="secondary-button" disabled={deleting} onClick={onCancel}>{t.noKeep}</button>
+          <button className="confirm-delete-button" disabled={deleting} onClick={onConfirm}>
+            {deleting ? t.deleting : t.yesDelete}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -915,54 +1004,141 @@ function App() {
   const [formOpen, setFormOpen] = useState(false)
   const [preparationFormOpen, setPreparationFormOpen] = useState(false)
   const [toast, setToast] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const toastTimer = useRef(null)
   const t = messages[language]
 
   const showError = (error) => setError(errorMessage(error, t))
-  const refresh = async () => { const nextData = await api('/api/data'); setData(nextData); return nextData }
 
   useEffect(() => {
-    api('/api/data')
-      .then((nextData) => setData(nextData))
-      .catch((error) => setError(errorMessage(error, messages.km)))
-      .finally(() => setLoading(false))
+    const controller = new AbortController()
+    let active = true
+
+    api('/api/data', { signal: controller.signal })
+      .then((nextData) => {
+        if (active) setData(normalizeData(nextData))
+      })
+      .catch((error) => {
+        if (active && error.name !== 'AbortError') setError(errorMessage(error, messages.km))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
   }, [])
 
   useEffect(() => {
     document.documentElement.lang = language === 'km' ? 'km' : 'en'
   }, [language])
 
-  const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2200) }
+  const overlayOpen = Boolean(selectedRecipe || selectedPreparation || formOpen || preparationFormOpen || deleteTarget)
+  useEffect(() => {
+    if (!overlayOpen) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [overlayOpen])
+
+  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
+
+  const notify = (message) => {
+    window.clearTimeout(toastTimer.current)
+    setToast(message)
+    toastTimer.current = window.setTimeout(() => setToast(''), 2200)
+  }
+
   const filteredRecipes = useMemo(() => data.recipes.filter((recipe) => {
     const matchesCategory = category === 'All' || recipe.category === category
-    const text = `${recipe.name} ${recipe.nameKm || ''} ${recipe.description} ${recipe.descriptionKm || ''}`.toLowerCase()
-    return matchesCategory && text.includes(query.toLowerCase())
+    const text = `${recipe.name} ${recipe.nameKm || ''} ${recipe.description} ${recipe.descriptionKm || ''}`.toLocaleLowerCase()
+    return matchesCategory && text.includes(query.trim().toLocaleLowerCase())
   }), [data.recipes, category, query])
 
+  const preparationUsageCounts = useMemo(() => {
+    const counts = new Map()
+    data.recipes.forEach((recipe) => {
+      new Set((recipe.preparations || []).map((line) => line.preparationId)).forEach((id) => {
+        counts.set(id, (counts.get(id) || 0) + 1)
+      })
+    })
+    return counts
+  }, [data.recipes])
+
+  const ingredientUsageCounts = useMemo(() => {
+    const counts = new Map()
+    const addUsage = (items) => {
+      new Set(items.map((line) => line.ingredientId)).forEach((id) => {
+        counts.set(id, (counts.get(id) || 0) + 1)
+      })
+    }
+    data.recipes.forEach((recipe) => addUsage(recipe.ingredients || []))
+    data.preparations.forEach((preparation) => addUsage(preparation.ingredients || []))
+    return counts
+  }, [data.recipes, data.preparations])
+
   const saveRecipe = async (recipe) => {
+    const isEditing = Boolean(editingRecipe)
+    setError('')
     try {
-      const saved = await api(editingRecipe ? `/api/recipes/${editingRecipe.id}` : '/api/recipes', { method: editingRecipe ? 'PUT' : 'POST', body: JSON.stringify(recipe) })
-      await refresh()
-      setFormOpen(false); setEditingRecipe(null); setSelectedRecipe(saved); notify(t.savedJson)
+      const saved = await api(
+        isEditing ? `/api/recipes/${editingRecipe.id}` : '/api/recipes',
+        { method: isEditing ? 'PUT' : 'POST', body: JSON.stringify(recipe) },
+      )
+      setData((current) => ({
+        ...current,
+        recipes: isEditing
+          ? current.recipes.map((item) => item.id === saved.id ? saved : item)
+          : [saved, ...current.recipes],
+      }))
+      setFormOpen(false)
+      setEditingRecipe(null)
+      setSelectedRecipe(saved)
+      notify(t.savedJson)
     } catch (error) { showError(error); throw error }
   }
 
-  const deleteRecipe = async (id) => {
-    try { await api(`/api/recipes/${id}`, { method: 'DELETE' }); await refresh(); setSelectedRecipe(null); notify(t.recipeDeleted) }
-    catch (error) { showError(error) }
-  }
-
-  const ingredientAction = async (path, options, message) => {
-    try { await api(path, options); await refresh(); notify(message) }
+  const addIngredient = async (ingredient) => {
+    setError('')
+    try {
+      const saved = await api('/api/ingredients', { method: 'POST', body: JSON.stringify(ingredient) })
+      setData((current) => ({ ...current, ingredients: [...current.ingredients, saved] }))
+      notify(t.ingredientAdded)
+    }
     catch (error) { showError(error); throw error }
   }
 
+  const updateIngredient = async (id, ingredient) => {
+    setError('')
+    try {
+      const saved = await api(`/api/ingredients/${id}`, { method: 'PUT', body: JSON.stringify(ingredient) })
+      setData((current) => ({
+        ...current,
+        ingredients: current.ingredients.map((item) => item.id === saved.id ? saved : item),
+      }))
+      notify(t.ingredientUpdated)
+    } catch (error) { showError(error); throw error }
+  }
+
   const savePreparation = async (preparation) => {
+    const isEditing = Boolean(editingPreparation)
+    setError('')
     try {
       const saved = await api(
-        editingPreparation ? `/api/preparations/${editingPreparation.id}` : '/api/preparations',
-        { method: editingPreparation ? 'PUT' : 'POST', body: JSON.stringify(preparation) },
+        isEditing ? `/api/preparations/${editingPreparation.id}` : '/api/preparations',
+        { method: isEditing ? 'PUT' : 'POST', body: JSON.stringify(preparation) },
       )
-      await refresh()
+      setData((current) => ({
+        ...current,
+        preparations: isEditing
+          ? current.preparations.map((item) => item.id === saved.id ? saved : item)
+          : [saved, ...current.preparations],
+      }))
       setPreparationFormOpen(false)
       setEditingPreparation(null)
       setSelectedPreparation(saved)
@@ -973,34 +1149,94 @@ function App() {
     }
   }
 
-  const deletePreparation = async (id) => {
+  const askToDelete = (type, id, name) => {
+    if (deleting) return
+    setDeleteTarget({ type, id, name })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return
+
+    const target = deleteTarget
+    const settings = {
+      recipe: { path: `/api/recipes/${target.id}`, message: t.recipeDeleted },
+      preparation: { path: `/api/preparations/${target.id}`, message: t.preparationDeleted },
+      ingredient: { path: `/api/ingredients/${target.id}`, message: t.ingredientDeleted },
+    }[target.type]
+
+    if (!settings) return
+
+    setDeleting(true)
+    setError('')
+    if (target.type === 'recipe') setSelectedRecipe(null)
+    if (target.type === 'preparation') setSelectedPreparation(null)
+
     try {
-      await api(`/api/preparations/${id}`, { method: 'DELETE' })
-      await refresh()
-      setSelectedPreparation(null)
-      notify(t.preparationDeleted)
+      await api(settings.path, { method: 'DELETE' })
+      setData((current) => {
+        if (target.type === 'recipe') {
+          return { ...current, recipes: current.recipes.filter((item) => item.id !== target.id) }
+        }
+        if (target.type === 'preparation') {
+          return { ...current, preparations: current.preparations.filter((item) => item.id !== target.id) }
+        }
+        return { ...current, ingredients: current.ingredients.filter((item) => item.id !== target.id) }
+      })
+      notify(settings.message)
     } catch (error) {
-      setError(error.message.includes('used in a drink') ? t.cannotDeleteUsedPreparation : error.message)
+      if (target.type === 'preparation' && error.message.includes('used in a drink')) {
+        setError(t.cannotDeleteUsedPreparation)
+      } else {
+        showError(error)
+      }
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
     }
   }
+
+  const openMobileCreate = () => {
+    if (page === 'preparations') {
+      setEditingPreparation(null)
+      setPreparationFormOpen(true)
+      return
+    }
+    if (page === 'warehouse') {
+      const form = document.getElementById('ingredient-form')
+      form?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      form?.querySelector('input')?.focus({ preventScroll: true })
+      return
+    }
+    setEditingRecipe(null)
+    setFormOpen(true)
+  }
+
+  const mobileCreateLabel = page === 'preparations'
+    ? t.newPreparation
+    : page === 'warehouse'
+      ? t.addIngredient
+      : t.newRecipe
 
   if (loading) return <div className="state-screen"><span className="loader" /><p>{t.loading}</p></div>
 
   return (
     <div className={`app lang-${language}`}>
       <header className="topbar">
-        <button className="brand" onClick={() => setPage('recipes')}><span>PHIN</span><i>&</i><span>POUR</span><small>{t.staffRecipes}</small></button>
+        <button className="brand" onClick={() => setPage('recipes')}>
+          <span className="brand-word">PHIN</span><i className="brand-amp">&</i><span className="brand-word">POUR</span>
+          <span className="brand-short">P&amp;P</span><small>{t.staffRecipes}</small>
+        </button>
         <nav>
-          <button className={page === 'recipes' ? 'active' : ''} onClick={() => setPage('recipes')}><Icon name="book" size={18} /> {t.recipes}</button>
-          <button className={page === 'preparations' ? 'active' : ''} onClick={() => setPage('preparations')}><Icon name="prep" size={18} /> {t.preparations}</button>
-          <button className={page === 'warehouse' ? 'active' : ''} onClick={() => setPage('warehouse')}><Icon name="box" size={18} /> {t.ingredients}</button>
+          <button aria-label={t.recipes} title={t.recipes} className={page === 'recipes' ? 'active' : ''} onClick={() => setPage('recipes')}><Icon name="book" size={18} /><span className="nav-label">{t.recipes}</span></button>
+          <button aria-label={t.preparations} title={t.preparations} className={page === 'preparations' ? 'active' : ''} onClick={() => setPage('preparations')}><Icon name="prep" size={18} /><span className="nav-label">{t.preparations}</span></button>
+          <button aria-label={t.ingredients} title={t.ingredients} className={page === 'warehouse' ? 'active' : ''} onClick={() => setPage('warehouse')}><Icon name="box" size={18} /><span className="nav-label">{t.ingredients}</span></button>
         </nav>
         <div className="header-actions">
           <div className="language-switch" aria-label="Language">
             <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
             <button className={language === 'km' ? 'active' : ''} onClick={() => setLanguage('km')}>KH</button>
           </div>
-          <button className="primary-button top-add" onClick={() => { setEditingRecipe(null); setFormOpen(true) }}><Icon name="plus" size={18} /> {t.newRecipe}</button>
+          <button aria-label={t.newRecipe} className="primary-button top-add" onClick={() => { setEditingRecipe(null); setFormOpen(true) }}><Icon name="plus" size={18} /><span className="top-add-label">{t.newRecipe}</span></button>
         </div>
       </header>
 
@@ -1023,35 +1259,41 @@ function App() {
         ) : page === 'preparations' ? (
           <PreparationsPage
             preparations={data.preparations || []}
-            recipes={data.recipes}
+            usageCounts={preparationUsageCounts}
             language={language}
             t={t}
             onOpen={setSelectedPreparation}
             onCreate={() => { setEditingPreparation(null); setPreparationFormOpen(true) }}
             onEdit={(preparation) => { setEditingPreparation(preparation); setPreparationFormOpen(true) }}
-            onDelete={deletePreparation}
+            onDelete={(id) => {
+              const preparation = data.preparations.find((item) => item.id === id)
+              askToDelete('preparation', id, localText(preparation, 'name', language))
+            }}
           />
         ) : (
           <Warehouse
-            ingredients={data.ingredients} recipes={data.recipes} preparations={data.preparations || []} language={language} t={t}
-            onAdd={(ingredient) => ingredientAction('/api/ingredients', { method: 'POST', body: JSON.stringify(ingredient) }, t.ingredientAdded)}
-            onUpdate={(id, ingredient) => ingredientAction(`/api/ingredients/${id}`, { method: 'PUT', body: JSON.stringify(ingredient) }, t.ingredientUpdated)}
-            onDelete={(id) => ingredientAction(`/api/ingredients/${id}`, { method: 'DELETE' }, t.ingredientDeleted)}
+            ingredients={data.ingredients} usageCounts={ingredientUsageCounts} language={language} t={t}
+            onAdd={addIngredient}
+            onUpdate={updateIngredient}
+            onDelete={(id) => {
+              const ingredient = data.ingredients.find((item) => item.id === id)
+              askToDelete('ingredient', id, localText(ingredient, 'name', language))
+            }}
           />
         )}
       </main>
 
-      {selectedRecipe && <RecipeView recipe={selectedRecipe} ingredients={data.ingredients} preparations={data.preparations || []} language={language} t={t} onClose={() => setSelectedRecipe(null)} onEdit={(recipe) => { setSelectedRecipe(null); setEditingRecipe(recipe); setFormOpen(true) }} onDelete={deleteRecipe} />}
+      {selectedRecipe && <RecipeView recipe={selectedRecipe} ingredients={data.ingredients} preparations={data.preparations || []} language={language} t={t} onClose={() => setSelectedRecipe(null)} onEdit={(recipe) => { setSelectedRecipe(null); setEditingRecipe(recipe); setFormOpen(true) }} onDelete={(id) => askToDelete('recipe', id, localText(selectedRecipe, 'name', language))} />}
       {selectedPreparation && (
         <PreparationView
           preparation={selectedPreparation}
           ingredients={data.ingredients}
           language={language}
           t={t}
-          usedCount={data.recipes.filter((recipe) => recipe.preparations?.some((line) => line.preparationId === selectedPreparation.id)).length}
+          usedCount={preparationUsageCounts.get(selectedPreparation.id) || 0}
           onClose={() => setSelectedPreparation(null)}
           onEdit={(preparation) => { setSelectedPreparation(null); setEditingPreparation(preparation); setPreparationFormOpen(true) }}
-          onDelete={deletePreparation}
+          onDelete={(id) => askToDelete('preparation', id, localText(selectedPreparation, 'name', language))}
         />
       )}
       {formOpen && <RecipeForm key={editingRecipe?.id || 'new'} recipe={editingRecipe} ingredients={data.ingredients} preparations={data.preparations || []} language={language} t={t} onClose={() => { setFormOpen(false); setEditingRecipe(null) }} onSave={saveRecipe} />}
@@ -1066,8 +1308,15 @@ function App() {
           onSave={savePreparation}
         />
       )}
+      <ConfirmDeleteDialog
+        item={deleteTarget}
+        t={t}
+        deleting={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
 
-      <button className="mobile-add" onClick={() => { setEditingRecipe(null); setFormOpen(true) }} aria-label={t.newRecipe}><Icon name="plus" size={23} /></button>
+      <button className="mobile-add" onClick={openMobileCreate} aria-label={mobileCreateLabel}><Icon name="plus" size={23} /></button>
       {error && <div className="error-toast"><Icon name="alert" size={18} /><span>{error}</span><button onClick={() => setError('')} aria-label={t.cancel}><Icon name="close" size={16} /></button></div>}
       {toast && <div className="success-toast"><Icon name="check" size={17} />{toast}</div>}
     </div>
