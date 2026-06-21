@@ -100,6 +100,7 @@ const messages = {
     ingredientUpdated: 'Ingredient updated',
     ingredientDeleted: 'Ingredient deleted',
     backendError: 'Cannot connect to the recipe server. Start the app with “npm run dev”, then open the shown address.',
+    storageError: 'The recipe library is available read-only. To save changes, connect a Public Vercel Blob store to this project and redeploy.',
     all: 'All',
     phin: 'Phin',
     espresso: 'Espresso',
@@ -201,6 +202,7 @@ const messages = {
     ingredientUpdated: 'បានកែគ្រឿងផ្សំ',
     ingredientDeleted: 'បានលុបគ្រឿងផ្សំ',
     backendError: 'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេរូបមន្តបានទេ។ សូមដំណើរការ “npm run dev” ហើយបើកអាសយដ្ឋានដែលបានបង្ហាញ។',
+    storageError: 'អាចមើលរូបមន្តបាន ប៉ុន្តែមិនទាន់អាចរក្សាទុកការកែប្រែបានទេ។ សូមភ្ជាប់ Public Vercel Blob Store ទៅ Project នេះ ហើយ Deploy ម្តងទៀត។',
     all: 'ទាំងអស់',
     phin: 'កាហ្វេហ្វីន',
     espresso: 'អេស្ព្រេសសូ',
@@ -269,6 +271,12 @@ async function api(path, options) {
   const body = await response.json()
   if (!response.ok) throw new Error(body.error || 'Something went wrong')
   return body
+}
+
+function errorMessage(error, translations) {
+  if (error.message === 'BACKEND_UNAVAILABLE') return translations.backendError
+  if (error.message.includes('Vercel Blob is not connected')) return translations.storageError
+  return error.message
 }
 
 function CategoryArtwork({ category }) {
@@ -909,13 +917,13 @@ function App() {
   const [toast, setToast] = useState('')
   const t = messages[language]
 
-  const showError = (error) => setError(error.message === 'BACKEND_UNAVAILABLE' ? t.backendError : error.message)
+  const showError = (error) => setError(errorMessage(error, t))
   const refresh = async () => { const nextData = await api('/api/data'); setData(nextData); return nextData }
 
   useEffect(() => {
     api('/api/data')
       .then((nextData) => setData(nextData))
-      .catch((error) => setError(error.message === 'BACKEND_UNAVAILABLE' ? messages.km.backendError : error.message))
+      .catch((error) => setError(errorMessage(error, messages.km)))
       .finally(() => setLoading(false))
   }, [])
 
