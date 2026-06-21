@@ -17,7 +17,7 @@ npm run dev
 
 Open `http://127.0.0.1:5173`.
 
-Recipes and warehouse ingredients are stored in `data/data.json`. The local Node server updates this file whenever a recipe or ingredient is created, edited, or deleted.
+Local recipes and warehouse ingredients are stored in `data/data.json`. It starts empty and the local Node server updates it whenever an item is created, edited, or deleted.
 
 See `RECIPE_RESEARCH.md` for the source and calibration notes behind the starter menu.
 
@@ -42,7 +42,7 @@ The deployed app uses Vercel Functions for `/api/*` and Vercel Blob for persiste
 4. Connect the Blob store to this project. Vercel adds `BLOB_READ_WRITE_TOKEN` automatically.
 5. Redeploy the project.
 
-The first request copies the starter content—or migrates the latest older version—into one `current.json` Blob. Later edits update that file with conflict protection, avoiding an ever-growing list of versions. Production and preview deployments use separate data prefixes.
+The first request creates an empty `current.json` Blob—or migrates the latest older Blob version when one exists. Later edits update that file with conflict protection. Production and preview deployments use separate data prefixes.
 
 If the app says storage is not connected, confirm that the Blob integration added `BLOB_READ_WRITE_TOKEN` (or Vercel OIDC credentials with `BLOB_STORE_ID`) under **Project Settings → Environment Variables**, then redeploy.
 
