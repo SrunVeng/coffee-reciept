@@ -1,5 +1,41 @@
 {
-  "ingredients": [],
-  "preparations": [],
+  "ingredients": [
+    {
+      "id": "1-mqnz4lpb",
+      "name": "1",
+      "nameKm": "1",
+      "category": "Coffee",
+      "defaultUnit": "shot"
+    }
+  ],
+  "preparations": [
+    {
+      "id": "1-mqnz4v3b",
+      "name": "1",
+      "nameKm": "",
+      "description": "1",
+      "descriptionKm": "",
+      "type": "Topping",
+      "prepTime": 5,
+      "yieldAmount": 1,
+      "yieldUnit": "g",
+      "ingredients": [
+        {
+          "ingredientId": "1-mqnz4lpb",
+          "amount": 1,
+          "unit": "shot"
+        }
+      ],
+      "steps": [
+        "1"
+      ],
+      "stepsKm": [
+        ""
+      ],
+      "storage": "",
+      "storageKm": "",
+      "sources": []
+    }
+  ],
   "recipes": []
 }

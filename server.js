@@ -5,8 +5,14 @@ import { extname, join, normalize } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { processRecipeRequest } from './lib/recipe-service.js'
+import { clearSessionCookie, createSessionCookie, getAuthStatus, isAuthenticated, verifyPassword } from './lib/auth.js'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
+try {
+  process.loadEnvFile(join(root, '.env.local'))
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error
+}
 const dataFile = join(root, 'data', 'data.json')
 const isDev = process.argv.includes('--dev')
 const port = Number(process.env.PORT || 5173)
@@ -42,10 +48,11 @@ async function saveData(data) {
   await rename(temporaryFile, dataFile)
 }
 
-function sendJson(response, status, body) {
+function sendJson(response, status, body, headers = {}) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    ...headers,
   })
   response.end(JSON.stringify(body))
 }
@@ -88,14 +95,57 @@ async function handleApi(request, response, pathname) {
     sendJson(response, 200, {
       ok: true,
       api: 'local-node',
+      authentication: getAuthStatus(),
       storage: { configured: true, environment: 'local' },
     })
+    return true
+  }
+
+  if (pathname === '/api/auth') {
+    const auth = getAuthStatus()
+    if (!auth.configured) {
+      sendJson(response, 503, { error: 'App authentication is not configured.', code: 'AUTH_NOT_CONFIGURED' })
+      return true
+    }
+    if (request.method === 'GET') {
+      sendJson(response, 200, { authenticated: isAuthenticated(request) })
+      return true
+    }
+    if (request.method !== 'POST') {
+      sendJson(response, 405, { error: 'Method not allowed' }, { Allow: 'GET, POST' })
+      return true
+    }
+
+    const body = await readBody(request)
+    if (body.action === 'logout') {
+      sendJson(response, 200, { authenticated: false }, { 'Set-Cookie': clearSessionCookie() })
+      return true
+    }
+    if (body.action === 'login') {
+      if (!verifyPassword(body.password)) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        sendJson(response, 401, { error: 'Incorrect password.', code: 'INVALID_PASSWORD' })
+        return true
+      }
+      sendJson(response, 200, { authenticated: true }, { 'Set-Cookie': createSessionCookie() })
+      return true
+    }
+    sendJson(response, 400, { error: 'Invalid authentication action' })
+    return true
+  }
+
+  if (!isAuthenticated(request)) {
+    sendJson(response, 401, { error: 'Authentication required.', code: 'UNAUTHORIZED' })
     return true
   }
 
   const body = ['POST', 'PUT', 'PATCH'].includes(request.method)
     ? await readBody(request)
     : {}
+  if (request.method === 'POST' && pathname === '/api/data' && body.action === 'bulk-delete' && !verifyPassword(body.password)) {
+    sendJson(response, 403, { error: 'Incorrect password.', code: 'INVALID_PASSWORD' })
+    return true
+  }
   const execute = () => runRecipeRequest(request, response, pathname, body)
 
   if (request.method === 'GET') {

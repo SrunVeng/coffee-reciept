@@ -114,6 +114,17 @@ const messages = {
     itemsDeleted: '{count} items deleted',
     usedItemsSkipped: 'Items currently used by recipes cannot be selected.',
     dataChanged: 'Recipe data changed on another device. Reload the page and try again.',
+    loginTitle: 'Private staff access',
+    loginHelp: 'Enter the shop password to open the recipe library.',
+    password: 'Password',
+    enterPassword: 'Enter password',
+    unlock: 'Open app',
+    signingIn: 'Checking...',
+    incorrectPassword: 'Incorrect password. Try again.',
+    authenticationRequired: 'Your session expired. Enter the password again.',
+    authNotConfigured: 'Authentication is not configured on the server.',
+    confirmPasswordHelp: 'Enter the password again to delete multiple items.',
+    logout: 'Lock app',
     backendError: 'Cannot connect to the recipe server. Start the app with “npm run dev”, then open the shown address.',
     storageError: 'The recipe library is available read-only. To save changes, connect a Public Vercel Blob store to this project and redeploy.',
     all: 'All',
@@ -231,6 +242,17 @@ const messages = {
     itemsDeleted: 'បានលុប {count} ធាតុ',
     usedItemsSkipped: 'ធាតុដែលកំពុងប្រើក្នុងរូបមន្ត មិនអាចជ្រើសដើម្បីលុបបានទេ។',
     dataChanged: 'ទិន្នន័យរូបមន្តត្រូវបានកែប្រែពីឧបករណ៍ផ្សេង។ សូមផ្ទុកទំព័រឡើងវិញ ហើយសាកល្បងម្តងទៀត។',
+    loginTitle: 'ការចូលប្រើសម្រាប់បុគ្គលិក',
+    loginHelp: 'បញ្ចូលពាក្យសម្ងាត់របស់ហាង ដើម្បីបើកបណ្ណាល័យរូបមន្ត។',
+    password: 'ពាក្យសម្ងាត់',
+    enterPassword: 'បញ្ចូលពាក្យសម្ងាត់',
+    unlock: 'បើកកម្មវិធី',
+    signingIn: 'កំពុងពិនិត្យ...',
+    incorrectPassword: 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ។ សូមសាកល្បងម្តងទៀត។',
+    authenticationRequired: 'សម័យចូលបានផុតកំណត់។ សូមបញ្ចូលពាក្យសម្ងាត់ម្តងទៀត។',
+    authNotConfigured: 'ម៉ាស៊ីនមេមិនទាន់បានកំណត់ការផ្ទៀងផ្ទាត់ទេ។',
+    confirmPasswordHelp: 'បញ្ចូលពាក្យសម្ងាត់ម្តងទៀត ដើម្បីលុបធាតុច្រើន។',
+    logout: 'ចាក់សោកម្មវិធី',
     backendError: 'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេរូបមន្តបានទេ។ សូមដំណើរការ “npm run dev” ហើយបើកអាសយដ្ឋានដែលបានបង្ហាញ។',
     storageError: 'អាចមើលរូបមន្តបាន ប៉ុន្តែមិនទាន់អាចរក្សាទុកការកែប្រែបានទេ។ សូមភ្ជាប់ Public Vercel Blob Store ទៅ Project នេះ ហើយ Deploy ម្តងទៀត។',
     all: 'ទាំងអស់',
@@ -260,6 +282,8 @@ const icons = {
   tea: <><path d="M6 19c7 0 11-4 12-13-9 1-13 5-12 13Z" /><path d="M6 19c3-5 6-8 10-10" /></>,
   other: <><circle cx="8" cy="14" r="4" /><circle cx="16" cy="9" r="3" /><circle cx="17" cy="17" r="2" /></>,
   prep: <><path d="M7 4h10l-1 15H8Z" /><path d="M9 8h6M9.5 12h5M10 16h4" /><path d="M10 2h4" /></>,
+  lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
+  chevron: <path d="m7 10 5 5 5-5" />,
 }
 
 function Icon({ name, size = 20 }) {
@@ -344,7 +368,80 @@ function errorMessage(error, translations) {
   if (error.message === 'BACKEND_UNAVAILABLE') return translations.backendError
   if (error.message.includes('Vercel Blob is not connected')) return translations.storageError
   if (error.code === 'DATA_CHANGED') return translations.dataChanged
+  if (error.code === 'INVALID_PASSWORD') return translations.incorrectPassword
+  if (error.code === 'UNAUTHORIZED') return translations.authenticationRequired
+  if (error.code === 'AUTH_NOT_CONFIGURED') return translations.authNotConfigured
   return error.message
+}
+
+function CustomSelect({ value, onChange, options, placeholder = '—', ariaLabel, disabled = false }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+  const selected = options.find((option) => option.value === value)
+  const groups = options.reduce((result, option) => {
+    const group = option.group || ''
+    if (!result[group]) result[group] = []
+    result[group].push(option)
+    return result
+  }, {})
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  return (
+    <div className={`custom-select${open ? ' open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        className="custom-select-trigger"
+        disabled={disabled}
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className={selected ? '' : 'placeholder'}>{selected?.label || placeholder}</span>
+        <Icon name="chevron" size={17} />
+      </button>
+      {open && (
+        <div className="custom-select-menu" role="listbox" aria-label={ariaLabel}>
+          {Object.entries(groups).map(([group, items]) => (
+            <div className="custom-select-group" key={group || 'options'}>
+              {group && <span>{group}</span>}
+              {items.map((option) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === value}
+                  className={option.value === value ? 'selected' : ''}
+                  key={option.value}
+                  onClick={() => {
+                    onChange(option.value)
+                    setOpen(false)
+                  }}
+                >
+                  {option.label}
+                  {option.value === value && <Icon name="check" size={16} />}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function CategoryArtwork({ category }) {
@@ -574,31 +671,35 @@ function IngredientLine({ line, index, ingredients, ingredientsByCategory, langu
 
   return (
     <div className="ingredient-picker-row">
-      <label>
+      <div className="select-field">
         <span>{t.ingredient}</span>
-        <select value={line.ingredientId} onChange={(event) => selectIngredient(event.target.value)} required>
-          <option value="">{t.chooseIngredient}</option>
-          {ingredientCategories.map((category) => {
-            const items = ingredientsByCategory[category] || []
-            if (!items.length) return null
-            return (
-              <optgroup label={category} key={category}>
-                {items.map((item) => <option value={item.id} key={item.id}>{localText(item, 'name', language)}</option>)}
-              </optgroup>
-            )
-          })}
-        </select>
-      </label>
+        <CustomSelect
+          value={line.ingredientId}
+          onChange={selectIngredient}
+          placeholder={t.chooseIngredient}
+          ariaLabel={`${t.ingredient} ${index + 1}`}
+          options={ingredientCategories.flatMap((category) =>
+            (ingredientsByCategory[category] || []).map((item) => ({
+              value: item.id,
+              label: localText(item, 'name', language),
+              group: category,
+            })),
+          )}
+        />
+      </div>
       <label className="amount-field">
         <span>{t.amount}</span>
         <input type="number" min="0.01" step="0.01" value={line.amount} onChange={(event) => onChange(index, { ...line, amount: event.target.value })} required />
       </label>
-      <label className="unit-field">
+      <div className="select-field unit-field">
         <span>{t.unit}</span>
-        <select value={line.unit} onChange={(event) => onChange(index, { ...line, unit: event.target.value })} required>
-          {units.map((unit) => <option key={unit}>{unit}</option>)}
-        </select>
-      </label>
+        <CustomSelect
+          value={line.unit}
+          onChange={(unit) => onChange(index, { ...line, unit })}
+          ariaLabel={`${t.unit} ${index + 1}`}
+          options={units.map((unit) => ({ value: unit, label: unit }))}
+        />
+      </div>
       <button type="button" className="remove-row" onClick={() => onRemove(index)} aria-label={`${t.delete} ${t.ingredient} ${index + 1}`}>
         <Icon name="trash" size={18} />
       </button>
@@ -609,23 +710,29 @@ function IngredientLine({ line, index, ingredients, ingredientsByCategory, langu
 function PreparationLine({ line, index, preparations, language, t, onChange, onRemove }) {
   return (
     <div className="ingredient-picker-row preparation-picker-row">
-      <label>
+      <div className="select-field">
         <span>{t.preparations}</span>
-        <select value={line.preparationId} onChange={(event) => onChange(index, { ...line, preparationId: event.target.value })} required>
-          <option value="">{t.choosePreparation}</option>
-          {preparations.map((item) => <option value={item.id} key={item.id}>{localText(item, 'name', language)}</option>)}
-        </select>
-      </label>
+        <CustomSelect
+          value={line.preparationId}
+          onChange={(preparationId) => onChange(index, { ...line, preparationId })}
+          placeholder={t.choosePreparation}
+          ariaLabel={`${t.preparations} ${index + 1}`}
+          options={preparations.map((item) => ({ value: item.id, label: localText(item, 'name', language) }))}
+        />
+      </div>
       <label className="amount-field">
         <span>{t.amount}</span>
         <input type="number" min="0.01" step="0.01" value={line.amount} onChange={(event) => onChange(index, { ...line, amount: event.target.value })} required />
       </label>
-      <label className="unit-field">
+      <div className="select-field unit-field">
         <span>{t.unit}</span>
-        <select value={line.unit} onChange={(event) => onChange(index, { ...line, unit: event.target.value })} required>
-          {units.map((unit) => <option key={unit}>{unit}</option>)}
-        </select>
-      </label>
+        <CustomSelect
+          value={line.unit}
+          onChange={(unit) => onChange(index, { ...line, unit })}
+          ariaLabel={`${t.unit} ${index + 1}`}
+          options={units.map((unit) => ({ value: unit, label: unit }))}
+        />
+      </div>
       <button type="button" className="remove-row" onClick={() => onRemove(index)} aria-label={`${t.delete} ${t.preparations} ${index + 1}`}>
         <Icon name="trash" size={18} />
       </button>
@@ -689,7 +796,15 @@ function RecipeForm({ recipe, ingredients, preparations, language, t, onClose, o
             <div className="two-columns">
               <label className="field"><span>{t.drinkNameEn}</span><input autoFocus required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
               <label className="field"><span>{t.drinkNameKm}</span><input lang="km" value={form.nameKm} onChange={(event) => setForm({ ...form, nameKm: event.target.value })} /></label>
-              <label className="field"><span>{t.category}</span><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{categories.slice(1).map((category) => <option key={category} value={category}>{translateCategory(category, t)}</option>)}</select></label>
+              <div className="field">
+                <span>{t.category}</span>
+                <CustomSelect
+                  value={form.category}
+                  onChange={(category) => setForm({ ...form, category })}
+                  ariaLabel={t.category}
+                  options={categories.slice(1).map((category) => ({ value: category, label: translateCategory(category, t) }))}
+                />
+              </div>
               <label className="field"><span>{t.timeMinutes}</span><input type="number" min="1" required value={form.prepTime} onChange={(event) => setForm({ ...form, prepTime: event.target.value })} /></label>
               <label className="field"><span>{t.priceUsd}</span><input type="number" min="0.01" step="0.01" required value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label>
               <span />
@@ -844,10 +959,26 @@ function PreparationForm({ preparation, ingredients, language, t, onClose, onSav
             <div className="two-columns">
               <label className="field"><span>{t.preparationNameEn}</span><input autoFocus required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
               <label className="field"><span>{t.preparationNameKm}</span><input lang="km" value={form.nameKm} onChange={(event) => setForm({ ...form, nameKm: event.target.value })} /></label>
-              <label className="field"><span>{t.preparationType}</span><select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Topping</option><option>Base</option><option>Batch</option><option>Syrup</option><option>Other</option></select></label>
+              <div className="field">
+                <span>{t.preparationType}</span>
+                <CustomSelect
+                  value={form.type}
+                  onChange={(type) => setForm({ ...form, type })}
+                  ariaLabel={t.preparationType}
+                  options={['Topping', 'Base', 'Batch', 'Syrup', 'Other'].map((type) => ({ value: type, label: type }))}
+                />
+              </div>
               <label className="field"><span>{t.timeMinutes}</span><input type="number" min="1" required value={form.prepTime} onChange={(event) => setForm({ ...form, prepTime: event.target.value })} /></label>
               <label className="field"><span>{t.yieldAmount}</span><input type="number" min="0.01" step="0.01" required value={form.yieldAmount} onChange={(event) => setForm({ ...form, yieldAmount: event.target.value })} /></label>
-              <label className="field"><span>{t.yieldUnit}</span><select value={form.yieldUnit} onChange={(event) => setForm({ ...form, yieldUnit: event.target.value })}>{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+              <div className="field">
+                <span>{t.yieldUnit}</span>
+                <CustomSelect
+                  value={form.yieldUnit}
+                  onChange={(yieldUnit) => setForm({ ...form, yieldUnit })}
+                  ariaLabel={t.yieldUnit}
+                  options={units.map((unit) => ({ value: unit, label: unit }))}
+                />
+              </div>
               <label className="field"><span>{t.descriptionEn}</span><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
               <label className="field"><span>{t.descriptionKm}</span><input lang="km" value={form.descriptionKm} onChange={(event) => setForm({ ...form, descriptionKm: event.target.value })} /></label>
             </div>
@@ -1005,8 +1136,24 @@ function Warehouse({
           <h2>{editing ? t.editIngredient : t.addIngredient}</h2>
           <label className="field"><span>{t.ingredientNameEn}</span><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
           <label className="field"><span>{t.ingredientNameKm}</span><input lang="km" value={form.nameKm} onChange={(event) => setForm({ ...form, nameKm: event.target.value })} /></label>
-          <label className="field"><span>{t.group}</span><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{ingredientCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
-          <label className="field"><span>{t.defaultUnit}</span><select value={form.defaultUnit} onChange={(event) => setForm({ ...form, defaultUnit: event.target.value })}>{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+          <div className="field">
+            <span>{t.group}</span>
+            <CustomSelect
+              value={form.category}
+              onChange={(category) => setForm({ ...form, category })}
+              ariaLabel={t.group}
+              options={ingredientCategories.map((item) => ({ value: item, label: item }))}
+            />
+          </div>
+          <div className="field">
+            <span>{t.defaultUnit}</span>
+            <CustomSelect
+              value={form.defaultUnit}
+              onChange={(defaultUnit) => setForm({ ...form, defaultUnit })}
+              ariaLabel={t.defaultUnit}
+              options={units.map((unit) => ({ value: unit, label: unit }))}
+            />
+          </div>
           <button className="primary-button" disabled={submitting}>{submitting ? t.saving : editing ? t.saveChanges : t.addIngredient}</button>
           {editing && <button type="button" className="text-button" onClick={reset}>{t.cancelEditing}</button>}
         </form>
@@ -1058,7 +1205,6 @@ function PreparationsPage({
   language,
   t,
   onOpen,
-  onCreate,
   onEdit,
   onDelete,
   selectionMode,
@@ -1077,7 +1223,6 @@ function PreparationsPage({
     <section className="warehouse-page">
       <div className="page-heading preparation-heading">
         <div><span>{t.preparationGuide}</span><h1>{t.preparations}</h1><p>{t.preparationHelp}</p></div>
-        <button className="primary-button" onClick={onCreate}><Icon name="plus" size={18} /> {t.newPreparation}</button>
       </div>
       {!!preparations.length && (
         <SelectionToolbar
@@ -1120,7 +1265,62 @@ function PreparationsPage({
   )
 }
 
-function ConfirmDeleteDialog({ item, t, deleting, onCancel, onConfirm }) {
+function LoginScreen({ language, t, onLanguageChange, onLogin }) {
+  const [password, setPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!password || submitting) return
+    setSubmitting(true)
+    setMessage('')
+    try {
+      await onLogin(password)
+    } catch (error) {
+      setMessage(errorMessage(error, t))
+      setPassword('')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <main className={`login-screen lang-${language}`}>
+      <form className="login-card" onSubmit={submit}>
+        <div className="login-language language-switch" aria-label="Language">
+          <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => onLanguageChange('en')}>EN</button>
+          <button type="button" className={language === 'km' ? 'active' : ''} onClick={() => onLanguageChange('km')}>KH</button>
+        </div>
+        <span className="login-mark"><Icon name="lock" size={30} /></span>
+        <div>
+          <span className="category-label">PHIN &amp; POUR</span>
+          <h1>{t.loginTitle}</h1>
+          <p>{t.loginHelp}</p>
+        </div>
+        <label className="field">
+          <span>{t.password}</span>
+          <input
+            autoFocus
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder={t.enterPassword}
+            required
+          />
+        </label>
+        {message && <p className="login-error" role="alert">{message}</p>}
+        <button className="primary-button" disabled={submitting || !password}>
+          {submitting ? t.signingIn : t.unlock}
+        </button>
+      </form>
+    </main>
+  )
+}
+
+function ConfirmDeleteDialog({ item, t, deleting, error, onCancel, onConfirm }) {
+  const [password, setPassword] = useState('')
   if (!item) return null
   const count = item.ids.length
   const title = count > 1 ? t.confirmDeleteManyTitle : t.confirmDeleteTitle
@@ -1130,17 +1330,42 @@ function ConfirmDeleteDialog({ item, t, deleting, onCancel, onConfirm }) {
 
   return (
     <div className="overlay confirm-overlay" onMouseDown={(event) => event.target === event.currentTarget && !deleting && onCancel()}>
-      <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">
+      <form
+        className="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-delete-title"
+        aria-describedby="confirm-delete-text"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onConfirm(password)
+        }}
+      >
         <span className="confirm-icon"><Icon name="trash" size={25} /></span>
         <h2 id="confirm-delete-title">{title}</h2>
         <p id="confirm-delete-text">{description}</p>
+        {count > 1 && (
+          <label className="field confirm-password">
+            <span>{t.confirmPasswordHelp}</span>
+            <input
+              autoFocus
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={t.enterPassword}
+              required
+            />
+          </label>
+        )}
+        {error && <p className="confirm-error" role="alert">{error}</p>}
         <div className="confirm-actions">
-          <button className="secondary-button" disabled={deleting} onClick={onCancel}>{t.noKeep}</button>
-          <button className="confirm-delete-button" disabled={deleting} onClick={onConfirm}>
+          <button type="button" className="secondary-button" disabled={deleting} onClick={onCancel}>{t.noKeep}</button>
+          <button className="confirm-delete-button" disabled={deleting || (count > 1 && !password)}>
             {deleting ? t.deleting : t.yesDelete}
           </button>
         </div>
-      </section>
+      </form>
     </div>
   )
 }
@@ -1148,6 +1373,8 @@ function ConfirmDeleteDialog({ item, t, deleting, onCancel, onConfirm }) {
 function App() {
   const [data, setData] = useState({ recipes: [], ingredients: [], preparations: [] })
   const [language, setLanguage] = useState('km')
+  const [authChecking, setAuthChecking] = useState(true)
+  const [authenticated, setAuthenticated] = useState(false)
   const [page, setPage] = useState('recipes')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1161,6 +1388,7 @@ function App() {
   const [preparationFormOpen, setPreparationFormOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [selectionModes, setSelectionModes] = useState({ recipe: false, preparation: false, ingredient: false })
   const [selectedForDelete, setSelectedForDelete] = useState({ recipe: [], preparation: [], ingredient: [] })
@@ -1172,18 +1400,55 @@ function App() {
     ingredient: new Set(selectedForDelete.ingredient),
   }), [selectedForDelete])
 
-  const showError = (error) => setError(errorMessage(error, t))
+  const showError = (error) => {
+    if (error.code === 'UNAUTHORIZED') {
+      setAuthenticated(false)
+      setData({ recipes: [], ingredients: [], preparations: [] })
+    }
+    setError(errorMessage(error, t))
+  }
 
   useEffect(() => {
     const controller = new AbortController()
     let active = true
 
+    api('/api/auth', { signal: controller.signal })
+      .then((result) => {
+        if (active) setAuthenticated(Boolean(result.authenticated))
+      })
+      .catch((error) => {
+        if (active && error.name !== 'AbortError') {
+          setAuthenticated(false)
+          if (error.code === 'AUTH_NOT_CONFIGURED') setError(errorMessage(error, messages.km))
+        }
+      })
+      .finally(() => {
+        if (active) setAuthChecking(false)
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authenticated) return undefined
+
+    const controller = new AbortController()
+    let active = true
     api('/api/data', { signal: controller.signal })
       .then((nextData) => {
         if (active) setData(normalizeData(nextData))
       })
       .catch((error) => {
-        if (active && error.name !== 'AbortError') setError(errorMessage(error, messages.km))
+        if (active && error.name !== 'AbortError') {
+          if (error.code === 'UNAUTHORIZED') {
+            setAuthenticated(false)
+            setData({ recipes: [], ingredients: [], preparations: [] })
+          }
+          setError(errorMessage(error, messages.km))
+        }
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -1193,7 +1458,7 @@ function App() {
       active = false
       controller.abort()
     }
-  }, [])
+  }, [authenticated])
 
   useEffect(() => {
     document.documentElement.lang = language === 'km' ? 'km' : 'en'
@@ -1287,6 +1552,7 @@ function App() {
     const names = itemsForType(type)
       .filter((item) => idSet.has(item.id))
       .map((item) => localText(item, 'name', language))
+    setDeleteError('')
     setDeleteTarget({ type, ids, names })
   }
 
@@ -1359,31 +1625,36 @@ function App() {
 
   const askToDelete = (type, id, name) => {
     if (deleting) return
+    setDeleteError('')
     setDeleteTarget({ type, ids: [id], names: [name] })
   }
 
-  const confirmDelete = async () => {
+  const confirmDelete = async (password = '') => {
     if (!deleteTarget || deleting) return
 
     const target = deleteTarget
     const settings = {
-      recipe: { message: t.recipeDeleted },
-      preparation: { message: t.preparationDeleted },
-      ingredient: { message: t.ingredientDeleted },
+      recipe: { path: `/api/recipes/${target.ids[0]}`, message: t.recipeDeleted },
+      preparation: { path: `/api/preparations/${target.ids[0]}`, message: t.preparationDeleted },
+      ingredient: { path: `/api/ingredients/${target.ids[0]}`, message: t.ingredientDeleted },
     }[target.type]
 
     if (!settings) return
 
     setDeleting(true)
     setError('')
-    if (target.type === 'recipe' && target.ids.includes(selectedRecipe?.id)) setSelectedRecipe(null)
-    if (target.type === 'preparation' && target.ids.includes(selectedPreparation?.id)) setSelectedPreparation(null)
+    setDeleteError('')
 
     try {
-      const result = await api('/api/bulk-delete', {
-        method: 'POST',
-        body: JSON.stringify({ type: target.type, ids: target.ids }),
-      })
+      let result
+      if (target.ids.length === 1) {
+        result = await api(settings.path, { method: 'DELETE' })
+      } else {
+        result = await api('/api/data', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'bulk-delete', type: target.type, ids: target.ids, password }),
+        })
+      }
       const deletedIds = new Set(result.deletedIds || target.ids)
       setData((current) => {
         if (target.type === 'recipe') {
@@ -1395,18 +1666,22 @@ function App() {
         return { ...current, ingredients: current.ingredients.filter((item) => !deletedIds.has(item.id)) }
       })
       cancelSelection(target.type)
+      if (target.type === 'recipe' && target.ids.includes(selectedRecipe?.id)) setSelectedRecipe(null)
+      if (target.type === 'preparation' && target.ids.includes(selectedPreparation?.id)) setSelectedPreparation(null)
       notify(target.ids.length > 1
         ? t.itemsDeleted.replace('{count}', deletedIds.size)
         : settings.message)
+      setDeleteTarget(null)
     } catch (error) {
-      if (error.code === 'ITEMS_IN_USE') {
-        setError(target.type === 'preparation' ? t.cannotDeleteUsedPreparation : t.usedItemsSkipped)
+      if (error.code === 'INVALID_PASSWORD') {
+        setDeleteError(t.incorrectPassword)
+      } else if (error.code === 'ITEMS_IN_USE') {
+        setDeleteError(target.type === 'preparation' ? t.cannotDeleteUsedPreparation : t.usedItemsSkipped)
       } else {
         showError(error)
       }
     } finally {
       setDeleting(false)
-      setDeleteTarget(null)
     }
   }
 
@@ -1440,6 +1715,30 @@ function App() {
     setSelectedForDelete({ recipe: [], preparation: [], ingredient: [] })
   }
 
+  const login = async (password) => {
+    await api('/api/auth', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'login', password }),
+    })
+    setError('')
+    setLoading(true)
+    setAuthenticated(true)
+  }
+
+  const logout = async () => {
+    try {
+      await api('/api/auth', { method: 'POST', body: JSON.stringify({ action: 'logout' }) })
+    } finally {
+      setAuthenticated(false)
+      setData({ recipes: [], ingredients: [], preparations: [] })
+      setSelectedRecipe(null)
+      setSelectedPreparation(null)
+      setError('')
+    }
+  }
+
+  if (authChecking) return <div className="state-screen"><span className="loader" /></div>
+  if (!authenticated) return <LoginScreen language={language} t={t} onLanguageChange={setLanguage} onLogin={login} />
   if (loading) return <div className="state-screen"><span className="loader" /><p>{t.loading}</p></div>
 
   return (
@@ -1459,7 +1758,8 @@ function App() {
             <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
             <button className={language === 'km' ? 'active' : ''} onClick={() => setLanguage('km')}>KH</button>
           </div>
-          <button aria-label={t.newRecipe} className="primary-button top-add" onClick={() => { setEditingRecipe(null); setFormOpen(true) }}><Icon name="plus" size={18} /><span className="top-add-label">{t.newRecipe}</span></button>
+          <button aria-label={mobileCreateLabel} className="primary-button top-add" onClick={openMobileCreate}><Icon name="plus" size={18} /><span className="top-add-label">{mobileCreateLabel}</span></button>
+          <button className="icon-button logout-button" onClick={logout} aria-label={t.logout} title={t.logout}><Icon name="lock" size={17} /></button>
         </div>
       </header>
 
@@ -1511,7 +1811,6 @@ function App() {
             language={language}
             t={t}
             onOpen={setSelectedPreparation}
-            onCreate={() => { setEditingPreparation(null); setPreparationFormOpen(true) }}
             onEdit={(preparation) => { setEditingPreparation(preparation); setPreparationFormOpen(true) }}
             onDelete={(id) => {
               const preparation = data.preparations.find((item) => item.id === id)
@@ -1571,10 +1870,12 @@ function App() {
         />
       )}
       <ConfirmDeleteDialog
+        key={deleteTarget ? `${deleteTarget.type}:${deleteTarget.ids.join(',')}` : 'no-delete'}
         item={deleteTarget}
         t={t}
         deleting={deleting}
-        onCancel={() => setDeleteTarget(null)}
+        error={deleteError}
+        onCancel={() => { setDeleteTarget(null); setDeleteError('') }}
         onConfirm={confirmDelete}
       />
 

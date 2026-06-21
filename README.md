@@ -19,6 +19,8 @@ Open `http://127.0.0.1:5173`.
 
 Local recipes and warehouse ingredients are stored in `data/data.json`. It starts empty and the local Node server updates it whenever an item is created, edited, or deleted.
 
+Authentication is configured through `.env.local` for local development. The app stores only a one-way scrypt password hash and uses an HttpOnly signed session cookie; the plaintext password is never included in source code or browser storage.
+
 See `RECIPE_RESEARCH.md` for the source and calibration notes behind the starter menu.
 
 The server listens on the local network, so staff devices on the same Wi-Fi can use the computer's local IP address with port `5173`.
@@ -40,7 +42,8 @@ The deployed app uses Vercel Functions for `/api/*` and Vercel Blob for persiste
 2. Open the project in the Vercel dashboard.
 3. Open **Storage**, create a **Blob** store, and choose **Public** access.
 4. Connect the Blob store to this project. Vercel adds `BLOB_READ_WRITE_TOKEN` automatically.
-5. Redeploy the project.
+5. Add `APP_PASSWORD_HASH` and `SESSION_SECRET` from your private `.env.local` file to **Project Settings → Environment Variables**. Never commit `.env.local`.
+6. Redeploy the project.
 
 The first request creates an empty `current.json` Blob—or migrates the latest older Blob version when one exists. Later edits update that file with conflict protection. Reads use the Blob metadata endpoint and a versioned, no-cache download so deleted items cannot return from a stale CDN/list response. Production and preview deployments use separate data prefixes.
 
