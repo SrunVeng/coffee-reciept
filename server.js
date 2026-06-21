@@ -91,28 +91,25 @@ async function runRecipeRequest(request, response, pathname, body) {
 }
 
 async function handleApi(request, response, pathname) {
-  if (request.method === 'GET' && pathname === '/api/health') {
-    sendJson(response, 200, {
-      ok: true,
-      api: 'local-node',
-      authentication: getAuthStatus(),
-      storage: { configured: true, environment: 'local' },
-    })
-    return true
-  }
-
-  if (pathname === '/api/auth') {
-    const auth = getAuthStatus()
-    if (!auth.configured) {
-      sendJson(response, 503, { error: 'App authentication is not configured.', code: 'AUTH_NOT_CONFIGURED' })
-      return true
-    }
+  if (pathname === '/api/health') {
+    const authentication = getAuthStatus()
     if (request.method === 'GET') {
-      sendJson(response, 200, { authenticated: isAuthenticated(request) })
+      sendJson(response, 200, {
+        ok: true,
+        api: 'local-node',
+        authenticated: isAuthenticated(request),
+        authentication,
+        storage: { configured: true, environment: 'local' },
+      })
       return true
     }
     if (request.method !== 'POST') {
       sendJson(response, 405, { error: 'Method not allowed' }, { Allow: 'GET, POST' })
+      return true
+    }
+
+    if (!authentication.configured) {
+      sendJson(response, 503, { error: 'App authentication is not configured.', code: 'AUTH_NOT_CONFIGURED' })
       return true
     }
 
@@ -130,7 +127,7 @@ async function handleApi(request, response, pathname) {
       sendJson(response, 200, { authenticated: true }, { 'Set-Cookie': createSessionCookie() })
       return true
     }
-    sendJson(response, 400, { error: 'Invalid authentication action' })
+    sendJson(response, 400, { error: 'Invalid authentication action', code: 'INVALID_AUTH_ACTION' })
     return true
   }
 

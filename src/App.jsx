@@ -1412,8 +1412,13 @@ function App() {
     const controller = new AbortController()
     let active = true
 
-    api('/api/auth', { signal: controller.signal })
+    api('/api/health', { signal: controller.signal })
       .then((result) => {
+        if (result.authentication?.configured === false) {
+          const error = new Error('App authentication is not configured.')
+          error.code = 'AUTH_NOT_CONFIGURED'
+          throw error
+        }
         if (active) setAuthenticated(Boolean(result.authenticated))
       })
       .catch((error) => {
@@ -1716,7 +1721,7 @@ function App() {
   }
 
   const login = async (password) => {
-    await api('/api/auth', {
+    await api('/api/health', {
       method: 'POST',
       body: JSON.stringify({ action: 'login', password }),
     })
@@ -1727,7 +1732,7 @@ function App() {
 
   const logout = async () => {
     try {
-      await api('/api/auth', { method: 'POST', body: JSON.stringify({ action: 'logout' }) })
+      await api('/api/health', { method: 'POST', body: JSON.stringify({ action: 'logout' }) })
     } finally {
       setAuthenticated(false)
       setData({ recipes: [], ingredients: [], preparations: [] })

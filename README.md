@@ -49,12 +49,18 @@ The first request creates an empty `current.json` Blob—or migrates the latest 
 
 If the app says storage is not connected, confirm that the Blob integration added `BLOB_READ_WRITE_TOKEN` (or Vercel OIDC credentials with `BLOB_STORE_ID`) under **Project Settings → Environment Variables**, then redeploy.
 
-The API is currently intended for a trusted staff deployment. Before exposing the URL publicly, add authentication or enable Vercel Deployment Protection so strangers cannot change recipes.
+The app password protects the interface and all recipe-data API routes. Login, logout, and session checks use the existing `/api/health` function so Vercel only needs the established API route.
 
 After deploying, open `/api/health` on your deployment domain. It reports only whether credentials exist, never their values. A correctly connected production deployment should show:
 
 ```json
 {
+  "authenticated": false,
+  "authentication": {
+    "configured": true,
+    "hasPasswordHash": true,
+    "hasSessionSecret": true
+  },
   "storage": {
     "configured": true,
     "hasReadWriteToken": true,
